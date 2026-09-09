@@ -2,141 +2,224 @@
 
 if [[ ! -v MY_TODO_PATH ]]
 then
-    echo "\$MY_TODO_PATH is not set" >&2
-    exit 1
+	echo "\$MY_TODO_PATH is not set" >&2
+	exit 1
 fi
 
-# I got the codes below using tput and printf "%q"
-declare head_fmt done_fmt dtxt_fmt todo_fmt ttxt_fmt res_fmt
-head_fmt=$'\e[1m'       # Bold
-done_fmt=$'\e[2m\e[93m' # Dim and bright yellow
-dtxt_fmt=$'\e[2m\e[9m'  # Dim and strikethrough
-todo_fmt=$'\e[93m'      # Bright yellow
-ttxt_fmt=$'\e(B\e[m'    # Reset
-res_fmt=$'\e(B\e[m'     # Reset
+if [[ -f "$MY_TODO_PATH" ]]
+then
+	declare -a todo_list
+	mapfile -t todo_list < "$MY_TODO_PATH"
+else
+	echo "'${MY_TODO_PATH}' does not exist or is not a regular file" >&2
+	exit 1
+fi
 
-fmt_todo() {
-    local kind cbox item
-    kind="$1"
-    cbox="$2"
-    item="$3"
+cut_and_print() {
+	local line
+	line="$1"
 
-    case "$kind" in
-        "done")
-            printf "%s %s\n" \
-                "${done_fmt}${cbox}${res_fmt}" \
-                "${dtxt_fmt}${item}${res_fmt}"
-            ;;
-        "todo")
-            printf "%s %s\n" \
-                "${todo_fmt}${cbox}${res_fmt}" \
-                "${ttxt_fmt}${item}${res_fmt}"
-            ;;
-        *)
-            echo "Kind '$kind' is invalid" >&2
-            exit 1
-    esac
+	echo "$line"
+#	local -i char_limit line_length
+#	char_limit=80
+#	line_length=${#line}
+#
+#		if (( line_length > char_limit ))
+#		then
+#			echo "${line:0:${char_limit}}..."
+#		else
+#			echo "$line"
+#		fi
 }
 
-fmt_head() {
-    local header
-    header="$1"
+format_header() {
+	local header
+	header="$1"
 
-    printf "%s\n" "${head_fmt}${header}${res_fmt}"
+	# TODO: SWITCH TO COLOR CODES OVER TPUT
+	echo "${ tput bold; }${header}${ tput sgr0; }"
 }
-
-declare -a todo_list
-mapfile -t todo_list < <(echo "$(<"${MY_TODO_PATH}")")
-
-declare bname
-bname="${MY_TODO_PATH##*/}"
 
 print_todo() {
-    local todo_reg done_reg item_reg info_reg
-    todo_reg="[[:blank:]]*-\ \[[[:blank:]]\]" 
-    done_reg="[[:blank:]]*-\ \[[[:graph:]]\]"
-    item_reg=".*$"
-    info_reg="\(.*\)"
+	local todo_reg item_reg
+	todo_reg="[[:blank:]]*-\ \[.*\]" 
+	item_reg=".*$"
 
-    for line in "${todo_list[@]}"
-    do
-        if [[ "$line" =~ ($info_reg) ]]
-        then
-            line="${line//"${BASH_REMATCH[1]}"/"(details in ${bname})"}"
-        fi
-
-        if [[ "$line" =~ ($todo_reg)[[:blank:]]($item_reg) ]]
-        then
-            fmt_todo "todo" "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
-        fi
-
-        if [[ "$line" =~ ($done_reg)[[:blank:]]($item_reg) ]]
-        then
-            fmt_todo "done" "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
-        fi
-    done
+	for line in "${todo_list[@]}"
+	do
+		if [[ "$line" =~ ($todo_reg)[[:blank:]]($item_reg) ]]
+		then
+			cut_and_print "$line"
+		fi
+	done
 }
 
-usage() {
-    echo "Usage: $0 OPTION"
-    echo "Display or edit markdown to-do lists"
-    echo
-    echo "Options:"
-    echo "  -d, --display-list"
-    echo "    Display a list of tasks"
-    echo "    '\$MY_TODO_PATH' must be set and exported"
-    echo
-    echo "  -e, --edit-list"
-    echo "    Edit a list of tasks"
-    echo "    '\$MY_TODO_PATH' must be set and exported"
-    echo "    Either '\$VISUAL' or '\$EDITOR' must be set and exported"
-    echo
-    echo "  -h, --help"
-    echo "    Display this message and exit"
-}
 
 display() {
-    if (( ${#todo_list[@]} > 0 ))
-    then
-        fmt_head "To-Do:"
-        print_todo
-    else
-        fmt_head "$bname is empty"
-    fi
+	local bname
+	bname="${MY_TODO_PATH##*/}"
+
+	if (( ${#todo_list[@]} > 0 ))
+	then
+		format_header "${bname%.*}"
+		print_todo
+	else
+		format_header "$bname is empty"
+	fi
 }
 
 edit() {
-    if [[ -v EDITOR ]]
-    then
-        "${EDITOR}" "${MY_TODO_PATH}"
-    elif [[ -v VISUAL ]]
-    then
-        "${VISUAL}" "${MY_TODO_PATH}"
-    else
-        echo "Neither EDITOR nor VISUAL are set" >2&
-        exit 1
-    fi
+	if [[ -v EDITOR ]]
+	then
+		"${EDITOR}" "${MY_TODO_PATH}"
+	elif [[ -v VISUAL ]]
+	then
+		"${VISUAL}" "${MY_TODO_PATH}"
+	else
+		echo "Neither EDITOR nor VISUAL are set" >&2
+		exit 1
+	fi
 }
+
+usage() {
+	echo "Usage: $0 OPTION"
+	echo "Display or edit a Markdown to-do list"
+	echo
+	echo "Options:"
+	echo "  -d, --display-list"
+	echo "    Display a list of tasks"
+	echo "    '\$MY_TODO_PATH' must be set and exported"
+	echo
+	echo "  -e, --edit-list"
+	echo "    Edit a list of tasks"
+	echo "    '\$MY_TODO_PATH' must be set and exported"
+	echo "    Either '\$VISUAL' or '\$EDITOR' must be set and exported"
+	echo
+	echo "  -n, --no-color"
+	echo "    Print the list of tasks without any formatting"
+	echo
+	echo "  -h, --help"
+	echo "    Display this message and exit"
+}
+
+render() {
+	local -a result
+
+	bdfmt=$'\e[1m'
+	resbd=$'\e[22m'
+
+	dmfmt=$'\e[2m'
+	resdm=$'\e[22m'
+
+	itfmt=$'\e[3m'
+	resit=$'\e[23m'
+
+	ulfmt=$'\e[4m'
+	resul=$'\e[24m'
+
+	sofmt=$'\e[7m'
+	resso=$'\e[27m'
+
+	stfmt=$'\e[9m'
+	resst=$'\e[29m'
+
+	# For all colors; output of `tput setaf op`
+	recol=$'\e[30m\e[39;49m'
+	red=$'\e[91m'
+	green=$'\e[92m'
+	yellow=$'\e[93m'
+	blue=$'\e[94m'
+	purple=$'\e[95m'
+	cyan=$'\e[96m'
+	white=$'\e[97m'
+
+	while IFS= read -r line
+	do
+		# Bold
+		while [[ "$line" =~ (\*\*([^\*_]*)\*\*) || "$line" =~ (__([^\*_]*)__) ]]
+		do
+			line="${line//"${BASH_REMATCH[1]}"/"${bdfmt}${BASH_REMATCH[2]}${resbd}"}"
+		done
+
+		# Italics
+		while [[ "$line" =~ (\*([^\*_]*)\*) || "$line" =~ (_([^\*_]*)_) ]]
+		do
+			line="${line//"${BASH_REMATCH[1]}"/"${itfmt}${BASH_REMATCH[2]}${resit}"}"
+		done
+
+		# Backticks
+		while [[ "$line" =~ (\`([^\`]*)\`) ]]
+		do
+			line="${line//"${BASH_REMATCH[1]}"/"${green}${BASH_REMATCH[2]}${recol}"}"
+		done
+
+		# Empty check-boxes
+		if [[ "$line" =~  ([[:blank:]]*-\ \[[[:blank:]]\])\ (.*$) ]]
+		then
+			line="${line//"${BASH_REMATCH[1]}"/"${cyan}${BASH_REMATCH[1]}${recol}"}"
+		fi
+
+		# Completed check-boxes
+		if [[ "$line" =~  ([[:blank:]]*-\ \[[[:graph:]]\])\ (.*$) ]]
+		then
+			line="${line//"${BASH_REMATCH[1]}"/"${dmfmt}${cyan}${BASH_REMATCH[1]}${recol}"}"
+			line="${line//"${BASH_REMATCH[2]}"/"${stfmt}${BASH_REMATCH[2]}${resst}${resdm}"}"
+		fi
+
+		# Wikilinks
+		while [[ "$line" =~ (\[\[(.*)\]\]) ]]
+		do
+			line="${line//"${BASH_REMATCH[0]}"/"${ulfmt}${blue}${BASH_REMATCH[2]}${recol}${resul}"}"
+		done
+
+		result+=("$line")
+	done
+
+	printf "%s\n" "${result[@]}"
+}
+
+# TODO: Get rid of pipes
+if (( $# == 0 )) && [[ -t 1 ]]
+then
+	display | render
+	exit 0
+fi
+
+if (( $# == 0 )) && [[ ! -t 1 ]]
+then
+	display
+	exit 0
+fi
 
 while (( $# >= 0 ))
 do
-    case "$1" in
-        -d|--display-list)
-            display
-            exit 0
-            ;;
-        -e|--edit-list)
-            edit
-            exit 0
-            ;;
-        -h|--help)
-            usage
-            exit 0
-            ;;
-        *)
-            echo "Error: Unknown option: '$1'"
-            usage >&2
-            exit 1
-    esac
-    shift
+	case "$1" in
+		-n|--no-color)
+			display
+			exit 0
+			;;
+		-d|--display-list)
+			# TODO: Get rid of pipes
+			if [[ -t 1 ]]
+			then
+				display | render
+			else
+				display
+			fi
+			exit 0
+			;;
+		-e|--edit-list)
+			edit
+			exit 0
+			;;
+		-h|--help)
+			usage
+			exit 0
+			;;
+		*)
+			echo "Error: Unknown option: '$1'"
+			usage >&2
+			exit 1
+	esac
+	shift
 done
