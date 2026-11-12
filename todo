@@ -15,6 +15,33 @@ else
 	exit 1
 fi
 
+bdfmt=$'\e[1m'
+resbd=$'\e[22m'
+
+dmfmt=$'\e[2m'
+resdm=$'\e[22m'
+
+itfmt=$'\e[3m'
+resit=$'\e[23m'
+
+ulfmt=$'\e[4m'
+resul=$'\e[24m'
+
+sofmt=$'\e[7m'
+resso=$'\e[27m'
+
+stfmt=$'\e[9m'
+resst=$'\e[29m'
+
+recol=$'\e[30m\e[39;49m'
+red=$'\e[31m'
+green=$'\e[32m'
+yellow=$'\e[33m'
+blue=$'\e[34m'
+purple=$'\e[35m'
+cyan=$'\e[36m'
+white=$'\e[37m'
+
 cut_and_print() {
 	local line
 	line="$1"
@@ -37,7 +64,8 @@ format_header() {
 	header="$1"
 
 	# TODO: SWITCH TO COLOR CODES OVER TPUT
-	echo "${ tput bold; }${header}${ tput sgr0; }"
+	#echo "${bdfmt}${itfmt}${header}${resit}${resbd}"
+	echo "${bdfmt}${header}${resbd}"
 }
 
 print_todo() {
@@ -105,34 +133,6 @@ usage() {
 render() {
 	local -a result
 
-	bdfmt=$'\e[1m'
-	resbd=$'\e[22m'
-
-	dmfmt=$'\e[2m'
-	resdm=$'\e[22m'
-
-	itfmt=$'\e[3m'
-	resit=$'\e[23m'
-
-	ulfmt=$'\e[4m'
-	resul=$'\e[24m'
-
-	sofmt=$'\e[7m'
-	resso=$'\e[27m'
-
-	stfmt=$'\e[9m'
-	resst=$'\e[29m'
-
-	# For all colors; output of `tput setaf op`
-	recol=$'\e[30m\e[39;49m'
-	red=$'\e[91m'
-	green=$'\e[92m'
-	yellow=$'\e[93m'
-	blue=$'\e[94m'
-	purple=$'\e[95m'
-	cyan=$'\e[96m'
-	white=$'\e[97m'
-
 	while IFS= read -r line
 	do
 		# Bold
@@ -157,6 +157,7 @@ render() {
 		if [[ "$line" =~  ([[:blank:]]*-\ \[[[:blank:]]\])\ (.*$) ]]
 		then
 			line="${line//"${BASH_REMATCH[1]}"/"${cyan}${BASH_REMATCH[1]}${recol}"}"
+			line="${line/- /}"
 		fi
 
 		# Completed check-boxes
@@ -164,6 +165,7 @@ render() {
 		then
 			line="${line//"${BASH_REMATCH[1]}"/"${dmfmt}${cyan}${BASH_REMATCH[1]}${recol}"}"
 			line="${line//"${BASH_REMATCH[2]}"/"${stfmt}${BASH_REMATCH[2]}${resst}${resdm}"}"
+			line="${line/- /}"
 		fi
 
 		# Wikilinks
@@ -178,7 +180,6 @@ render() {
 	printf "%s\n" "${result[@]}"
 }
 
-# TODO: Get rid of pipes
 if (( $# == 0 )) && [[ -t 1 ]]
 then
 	display | render
@@ -199,7 +200,6 @@ do
 			exit 0
 			;;
 		-d|--display-list)
-			# TODO: Get rid of pipes
 			if [[ -t 1 ]]
 			then
 				display | render
